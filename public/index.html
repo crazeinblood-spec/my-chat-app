@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Just Us 💬</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --pink: #ff6eb4;
+      --purple: #a855f7;
+      --orange: #fb923c;
+      --yellow: #facc15;
+      --teal: #2dd4bf;
+      --blue: #60a5fa;
+      --bg: #0f0a1e;
+      --surface: #1a1030;
+      --card: #231840;
+      --border: rgba(255,255,255,0.08);
+      --text: #f1e8ff;
+      --muted: rgba(241,232,255,0.5);
+    }
+
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 20%, rgba(168,85,247,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(255,110,180,0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(45,212,191,0.05) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── JOIN SCREEN ── */
+    #join-screen {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 420px;
+      padding: 0 20px;
+      animation: fadeIn 0.5s ease;
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo h1 {
+      font-size: 38px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--pink), var(--purple), var(--blue));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo p {
+      font-size: 15px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 13px 16px;
+      background: rgba(255,255,255,0.06);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .field input:focus { border-color: var(--purple); }
+    .field input::placeholder { color: rgba(241,232,255,0.25); }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .divider span { font-size: 12px; color: var(--muted); font-weight: 700; }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      font-family: 'Nunito', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      color: #fff;
+      margin-bottom: 12px;
+    }
+
+    .btn-secondary {
+      background: linear-gradient(135deg, var(--blue), var(--teal));
+      color: #fff;
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .hint {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .error-msg {
+      background: rgba(248,113,113,0.15);
+      border: 1px solid rgba(248,113,113,0.3);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #fca5a5;
+      margin-top: 14px;
+      display: none;
+    }
+
+    /* ── CHAT SCREEN ── */
+    #chat-screen {
+      display: none;
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 700px;
+      height: 100vh;
+      max-height: 700px;
+      padding: 0 20px;
+      flex-direction: column;
+      animation: fadeIn 0.4s ease;
+    }
+
+    #chat-screen.active { display: flex; }
+
+    .chat-header {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 12px;
+      flex-shrink: 0;
+    }
+
+    .header-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .header-info { flex: 1; }
+    .header-name { font-size: 16px; font-weight: 800; }
+    .header-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .room-badge {
+      background: rgba(168,85,247,0.2);
+      border: 1px solid rgba(168,85,247,0.3);
+      border-radius: 20px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #c084fc;
+    }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: 4px 4px 8px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+
+    .system-msg {
+      text-align: center;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      padding: 6px 14px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 20px;
+      align-self: center;
+    }
+
+    .msg-row {
+      display: flex;
+      flex-direction: column;
+      max-width: 72%;
+    }
+
+    .msg-row.mine { align-self: flex-end; align-items: flex-end; }
+    .msg-row.theirs { align-self: flex-start; align-items: flex-start; }
+
+    .msg-name {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 4px;
+      padding: 0 4px;
+    }
+
+    .bubble {
+      padding: 11px 16px;
+      border-radius: 18px;
+      font-size: 15px;
+      font-weight: 600;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .mine .bubble {
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      color: #fff;
+      border-bottom-right-radius: 5px;
+    }
+
+    .theirs .bubble {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 5px;
+    }
+
+    .msg-time {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+      padding: 0 4px;
+    }
+
+    #typing-indicator {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--teal);
+      padding: 4px 8px;
+      min-height: 22px;
+      flex-shrink: 0;
+    }
+
+    .chat-input-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      flex-shrink: 0;
+      margin-top: 8px;
+    }
+
+    #msg-input {
+      flex: 1;
+      padding: 14px 18px;
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      outline: none;
+      resize: none;
+      transition: border-color 0.2s;
+      max-height: 120px;
+    }
+
+    #msg-input:focus { border-color: var(--purple); }
+    #msg-input::placeholder { color: rgba(241,232,255,0.3); }
+
+    #send-btn {
+      width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      border: none;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #send-btn:active { transform: scale(0.93); }
+
+    /* ── WAITING SCREEN ── */
+    #waiting-screen {
+      display: none;
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      animation: fadeIn 0.4s ease;
+      padding: 0 20px;
+    }
+
+    #waiting-screen.active { display: block; }
+
+    .waiting-icon { font-size: 64px; margin-bottom: 20px; animation: pulse 2s infinite; }
+
+    .waiting-title {
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--pink), var(--purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+    }
+
+    .waiting-sub { font-size: 15px; color: var(--muted); margin-bottom: 28px; }
+
+    .share-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 360px;
+      margin: 0 auto;
+    }
+
+    .share-label { font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+    .room-code-display {
+      font-size: 30px;
+      font-weight: 800;
+      letter-spacing: 0.15em;
+      background: linear-gradient(135deg, var(--orange), var(--yellow));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 14px;
+    }
+
+    .copy-btn {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 18px;
+      color: var(--text);
+      font-family: 'Nunito', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .copy-btn:hover { background: rgba(255,255,255,0.14); }
+
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+  </style>
+</head>
+<body>
+
+<!-- JOIN SCREEN -->
+<div id="join-screen">
+  <div class="logo">
+    <h1>Just Us 💬</h1>
+    <p>A private chat room for two people only</p>
+  </div>
+  <div class="card">
+    <div class="field">
+      <label>Your Name</label>
+      <input type="text" id="username-input" placeholder="Enter your name..." maxlength="20" />
+    </div>
+    <div class="field">
+      <label>Secret Room Code</label>
+      <input type="text" id="room-input" placeholder="e.g. sunshine42" maxlength="20" />
+    </div>
+    <button class="btn btn-primary" id="join-btn">Join Room ✨</button>
+    <div class="divider"><span>or</span></div>
+    <button class="btn btn-secondary" id="create-btn">Create New Room 🎲</button>
+    <div class="error-msg" id="error-msg"></div>
+    <p class="hint">Share the room code with only your friend — no one else can join!</p>
+  </div>
+</div>
+
+<!-- WAITING SCREEN -->
+<div id="waiting-screen">
+  <div class="waiting-icon">⏳</div>
+  <div class="waiting-title">Room is ready!</div>
+  <div class="waiting-sub">Share this code with your friend so they can join</div>
+  <div class="share-box">
+    <div class="share-label">Your Room Code</div>
+    <div class="room-code-display" id="waiting-code">—</div>
+    <button class="copy-btn" id="copy-btn">📋 Copy Code</button>
+  </div>
+</div>
+
+<!-- CHAT SCREEN -->
+<div id="chat-screen">
+  <div class="chat-header">
+    <div class="header-avatar" id="header-avatar">?</div>
+    <div class="header-info">
+      <div class="header-name" id="header-name">Chat</div>
+      <div class="header-sub" id="header-sub">Private room • 2 people only</div>
+    </div>
+    <div class="room-badge" id="room-badge">Room: —</div>
+  </div>
+  <div id="messages"></div>
+  <div id="typing-indicator"></div>
+  <div class="chat-input-row">
+    <textarea id="msg-input" rows="1" placeholder="Type a message..."></textarea>
+    <button id="send-btn">➤</button>
+  </div>
+</div>
+
+<script>
+  const socket = io();
+  let myUsername = '';
+  let myRoom = '';
+  let typingTimeout;
+
+  const joinScreen = document.getElementById('join-screen');
+  const waitingScreen = document.getElementById('waiting-screen');
+  const chatScreen = document.getElementById('chat-screen');
+  const errorMsg = document.getElementById('error-msg');
+
+  function randomCode() {
+    const words = ['star','moon','sun','rose','jade','sky','fire','wave','snow','lime'];
+    const w1 = words[Math.floor(Math.random() * words.length)];
+    const w2 = words[Math.floor(Math.random() * words.length)];
+    const n = Math.floor(Math.random() * 90) + 10;
+    return `${w1}${w2}${n}`;
+  }
+
+  function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+  }
+
+  function joinRoom(code) {
+    const username = document.getElementById('username-input').value.trim();
+    if (!username) { showError('Please enter your name!'); return; }
+    if (!code) { showError('Please enter a room code!'); return; }
+    myUsername = username;
+    myRoom = code;
+    socket.emit('join-room', { roomCode: code, username });
+  }
+
+  document.getElementById('join-btn').addEventListener('click', () => {
+    const code = document.getElementById('room-input').value.trim();
+    joinRoom(code);
+  });
+
+  document.getElementById('create-btn').addEventListener('click', () => {
+    const code = randomCode();
+    document.getElementById('room-input').value = code;
+    joinRoom(code);
+  });
+
+  document.getElementById('copy-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(myRoom).then(() => {
+      document.getElementById('copy-btn').textContent = '✅ Copied!';
+      setTimeout(() => { document.getElementById('copy-btn').textContent = '📋 Copy Code'; }, 2000);
+    });
+  });
+
+  socket.on('joined', ({ username }) => {
+    document.getElementById('header-name').textContent = username + "'s Room";
+    document.getElementById('header-avatar').textContent = username[0].toUpperCase();
+    document.getElementById('room-badge').textContent = 'Room: ' + myRoom;
+  });
+
+  socket.on('waiting', () => {
+    joinScreen.style.display = 'none';
+    waitingScreen.classList.add('active');
+    document.getElementById('waiting-code').textContent = myRoom;
+  });
+
+  socket.on('both-connected', ({ message }) => {
+    waitingScreen.classList.remove('active');
+    chatScreen.classList.add('active');
+    document.getElementById('header-sub').textContent = '🟢 Both connected • Private room';
+    addSystemMsg(message);
+  });
+
+  socket.on('room-full', () => {
+    showError('This room already has 2 people! Choose a different code.');
+  });
+
+  socket.on('receive-message', ({ message, username, timestamp, senderId }) => {
+    const isMine = senderId === socket.id;
+    addMessage(message, username, timestamp, isMine);
+  });
+
+  socket.on('user-typing', ({ username }) => {
+    document.getElementById('typing-indicator').textContent = `${username} is typing...`;
+  });
+
+  socket.on('user-stop-typing', () => {
+    document.getElementById('typing-indicator').textContent = '';
+  });
+
+  socket.on('user-left', ({ message }) => {
+    addSystemMsg(message);
+    document.getElementById('header-sub').textContent = '🔴 Friend disconnected';
+  });
+
+  function addMessage(text, username, timestamp, isMine) {
+    const msgs = document.getElementById('messages');
+    const row = document.createElement('div');
+    row.className = `msg-row ${isMine ? 'mine' : 'theirs'}`;
+    if (!isMine) {
+      const name = document.createElement('div');
+      name.className = 'msg-name';
+      name.textContent = username;
+      row.appendChild(name);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = text;
+    row.appendChild(bubble);
+    const time = document.createElement('div');
+    time.className = 'msg-time';
+    time.textContent = timestamp;
+    row.appendChild(time);
+    msgs.appendChild(row);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function addSystemMsg(text) {
+    const msgs = document.getElementById('messages');
+    const el = document.createElement('div');
+    el.className = 'system-msg';
+    el.textContent = text;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  const msgInput = document.getElementById('msg-input');
+  const sendBtn = document.getElementById('send-btn');
+
+  function sendMessage() {
+    const text = msgInput.value.trim();
+    if (!text) return;
+    socket.emit('send-message', { roomCode: myRoom, message: text, username: myUsername });
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+    socket.emit('stop-typing', { roomCode: myRoom });
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  msgInput.addEventListener('input', () => {
+    msgInput.style.height = 'auto';
+    msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+    socket.emit('typing', { roomCode: myRoom, username: myUsername });
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => socket.emit('stop-typing', { roomCode: myRoom }), 1500);
+  });
+</script>
+</body>
+</html>
